@@ -7,6 +7,7 @@ export const URL_IMSDB_ALL_SCRIPTS = URL_IMSDB + "all scripts/"
 
 export const CACHE_DIR = "./cache/"
 export const CACHE_SCRIPTS_DIR = CACHE_DIR + "raw-scripts/";
+export const CACHE_METADATA_FILE = CACHE_DIR + "metadata.json";
 
 // Movie annotation types
 
