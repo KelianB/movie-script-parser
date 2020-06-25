@@ -1,0 +1,4 @@
+cache/*.json
+cache/raw-scripts/*.txt
+output/*.json
+node_modules/
