@@ -5,6 +5,7 @@
 
 import {getMoviesList} from "./metadata-retriever.js"
 import {fetchMovieScriptsInBatch} from "../src/movie-script-retriever.js";
+import {MovieMetadata} from "../src/movie-metadata.js";
 import {CACHE_METADATA_FILE, CACHE_SCRIPTS_DIR} from "./constants.js"
 import {writeFileSync, readFileSync} from "fs"
 import stringSimilarity from "string-similarity"
