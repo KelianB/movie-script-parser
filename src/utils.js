@@ -13,11 +13,3 @@ export async function fetch(uri) {
     });
 }
 
-/**
- * Cleans up raw movie titles from IMSDb. 
- * @param {String} title A raw movie title (e.g. "A New Hope, The").
- * @return {String} the cleaned-up title. 
- */
-export function cleanUpMovieTitle(title) {
-    return title.trim().replace(/, the$/i, "").trim();
-}
