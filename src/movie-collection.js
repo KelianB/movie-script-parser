@@ -1,6 +1,6 @@
 /**
  * Responsible for operating on movie metadata and scripts, providing storage to cache and utility functions.
- * @module movie-metadata 
+ * @module movie-collection 
  */
 
 import {getMoviesList} from "./metadata-retriever.js"
