@@ -1,13 +1,12 @@
-import {fetch} from "./utils.js"
-import {resolve} from "url"
-import {MovieMetadata} from "./movie-metadata.js"
-import {URL_IMSDB, URL_IMSDB_ALL_SCRIPTS, BATCH_SIZE_FETCH_METADATA} from "./constants.js";
-
 /**
  * Responsible for fetching metadata for the movies available on IMSDb.
  * @module metadata-retriever
  */
 
+import {fetch} from "./utils.js"
+import {resolve} from "url"
+import {MovieMetadata} from "./movie-metadata.js"
+import {URL_IMSDB, URL_IMSDB_ALL_SCRIPTS, BATCH_SIZE_FETCH_METADATA} from "./constants.js";
 
 /**
  * Cleans up raw movie titles from IMSDb. 
