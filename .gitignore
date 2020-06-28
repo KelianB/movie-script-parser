@@ -1,4 +1,4 @@
 cache/*.json
 cache/raw-scripts/*.txt
-output/*.json
+output/*
 node_modules/
