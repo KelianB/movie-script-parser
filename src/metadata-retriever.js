@@ -1,20 +1,17 @@
 import {fetch} from "./utils.js"
 import {resolve} from "url"
 import {MovieMetadata} from "./movie-metadata.js"
-import {URL_IMSDB, URL_IMSDB_ALL_SCRIPTS} from "./constants.js";
+import {URL_IMSDB, URL_IMSDB_ALL_SCRIPTS, BATCH_SIZE_FETCH_METADATA} from "./constants.js";
 
 /**
  * Responsible for fetching metadata for the movies available on IMSDb.
  * @module metadata-retriever
  */
 
-// Number of parallel requests
-const FETCH_BATCH_SIZE = 5;
-
 
 /**
  * Cleans up raw movie titles from IMSDb. 
- * @param {String} title A raw movie title (e.g. "A New Hope, The").
+ * @param {String} title - A raw movie title (e.g. "A New Hope, The").
  * @return {String} the cleaned-up title. 
  */
 function cleanUpMovieTitle(title) {
@@ -28,12 +25,12 @@ function cleanUpMovieTitle(title) {
  * @param {Array<MovieMetadata>} movies - An array of movie metadata objects. 
  */
 async function fetchMovieDetailsInBatch(movies) {
-    const logProgress = (n) => process.stdout.write(`\rFetching movie details... ${i}/${movies.length}`);
+    const logProgress = (n) => process.stdout.write(`\rFetching movie details... ${n}/${movies.length}`);
         
     // Iterate over batches
-    for(let i = 0; i < movies.length; i+=FETCH_BATCH_SIZE) {
+    for(let i = 0; i < movies.length; i+=BATCH_SIZE_FETCH_METADATA) {
         logProgress(i);
-        let batch = movies.slice(i, Math.min(i + FETCH_BATCH_SIZE, movies.length));
+        let batch = movies.slice(i, Math.min(i + BATCH_SIZE_FETCH_METADATA, movies.length));
         // Wait until the batch is finished processing
         await Promise.all(batch.map(fetchMovieDetails));
     }
@@ -78,7 +75,7 @@ async function fetchMovieDetails(movie) {
 
 /**
  * Get a list of movies listed of IMSDb, with some metadata information.
- * @param {boolean} [fetchDetails=true] Whether or not to fetch additional details (genres, script URL) about the movies. This is time-intensive as it requires an additional request per movie.
+ * @param {boolean} [fetchDetails=true] - Whether or not to fetch additional details (genres, script URL) about the movies. This is time-intensive as it requires an additional request per movie.
  * @return {Array<MovieMetadata>} a list of movie metadata objects. 
  */
 export async function getMoviesList(fetchDetails=true) {
@@ -92,6 +89,7 @@ export async function getMoviesList(fetchDetails=true) {
         return [];
     }
 
+    // Get the <p> tags whose parents are <td> tags that include "Written by" in their inner text.
     let entryContainers = $("td")
         .filter((i, el) => $(el).text().includes("Written by"))
         .children("p");
