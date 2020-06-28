@@ -6,7 +6,6 @@
 
 /**
  * Stores and provides utility functions for parsed movie scripts. 
- * @class ParsedMovieScript
  */
 export class ParsedMovieScript {
     constructor(entries) {

@@ -16,7 +16,6 @@ function tokenizeMovieTitle(title) {
 
 
 /**
- * @class MovieMetadata
  * Stores movie meta information.
  */
 export class MovieMetadata {

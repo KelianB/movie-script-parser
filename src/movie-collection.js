@@ -11,7 +11,6 @@ import stringSimilarity from "string-similarity"
 
 /**
  * Handles storage and provides utility functions for {@link MovieMetadata} objects and raw movie scripts.
- * @class MovieCollection
  */
 export class MovieCollection {
     /**
