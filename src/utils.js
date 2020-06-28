@@ -1,3 +1,8 @@
+/**
+ * Provies general-purpose utility functions.
+ * @module utils
+ */
+
 import rp from "request-promise-native";
 import cheerio from "cheerio";
 
