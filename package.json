@@ -1,0 +1,29 @@
+{
+  "name": "movie-script-parser",
+  "description": "Parses movie scripts from IMSDb.",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "start.js",
+  "scripts": {
+    "start": "node tools/start.js",
+    "download-all": "node tools/download-all.js",
+    "doc": "jsdoc ./src -d ./docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KelianB/movie-script-parser.git"
+  },
+  "keywords": [],
+  "author": "Kelian BAERT",
+  "license": "MIT",
+  "homepage": "https://github.com/KelianB/movie-script-parser.git",
+  "dependencies": {
+    "cheerio": "1.0.0-rc.3",
+    "request": "^2.88.2",
+    "request-promise-native": "^1.0.8",
+    "string-similarity": "^4.0.1"
+  },
+  "devDependencies": {
+    "jsdoc": "^3.6.4"
+  }
+}
