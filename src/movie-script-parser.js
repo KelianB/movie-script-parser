@@ -60,6 +60,48 @@ function timeExecution(taskName, fn) {
 }
 
 
+let patterns = {};
+patterns.boldTag = /(<b>)|(<\/b>)/g;
+patterns.characterSuffix = /\s*(\((V.O.|VO|V\/O|O.S.|O.S|OS|O\/S|O.C.|OC|CONT'D|CONT|CONT.|CONT'D.|CONT 'D.|OFF)\))|( --)/g;
+patterns.characterExclusion = [
+    / -(<\/b>)?$/g, // ends with " -"
+    /^\s*(<b>)?\(.+\)(<\/b>)?$/, // all in parenthesis
+    /^\s*(<b>)?[^\w]+(<\/b>)?$/, // no alphanumeric characters
+];
+patterns.sceneLexicon = [
+    /( |^)INT\.?:? /g, /( |^)INTERIOR:? /g, /^\s*INSIDE /g,
+    /( |^)EXT\.?:? /g, /( |^)EXTERIOR:? /g, /^\s*OUTSIDE /g,
+    /( |^)EXT\.?\/INT\.?:? /g,
+    /( |^)INT\.?\/EXT\.?:? /g,
+    /( |^)E\.?\/I\.?:? /g,
+    /( |^)I\.?\/E\.?:? /g
+];
+patterns.metaLexicon = [
+    /FADE /g, /FADES /g, /DISSOLVE(:| )/g, /BLACK:/g,
+    /THE END/g, /- END/g,
+    /CREDITS/g,
+    /CUT TO/g, /CUT BACK TO/g, /WIPE TO/g,
+    /(INTERCUT)/g,
+    /CLOSE ON/g, /CLOSER ON/g, /CLOSE UP/g, /CLOSEUP/g,
+    /WIDER ON/g, /WIDE ON/g,
+    /RESUME ON/g, /BACK ON /g, /UP ON /g,
+    /<b>[A-Z]+ (ANGLE|SHOT)/g, // "WIDER ANGLE", "CLOSE ANGLE", "REACTION SHOT" etc
+    /<b>ANGLE ON /g, /<b>ON /g,
+    / LATER/g,
+    /CONTINUED/g,
+    /TRANSITION/g,
+    /(MORE)/g,
+    / SHOT:?$/g,
+    /THEIR POV/g, /'S POV/g,
+    /SUPER:/,
+    / BY .+ PLAYS\.?\s*/g, // ex: "SURRENDER" BY CHEAP TRICK PLAYS.
+    /<b>CAMERA /g,
+    /<b>ZOOM /g, 
+];
+patterns.speechCue = /^\s*(<b>)?\([^)(]+\)(<\/b>)?\s*$/; // e.g. "(screams)"
+patterns.numericalOnly = /^\s*(<b>)?[0-9]*\.?(<\/b>)?\s*$/;
+
+let cleanupCharacterEntry = e => e.content.replace(patterns.characterSuffix, "").toLowerCase().replace(patterns.boldTag, "").trim();
 
 /**
  * Handles the parsing of a single raw movie script.
@@ -73,7 +115,8 @@ class ScriptParser {
         this.entries = [];
     }
     
-    pass(entries, processEntry) {
+    pass(processEntry, entries) {
+        entries = entries || this.entries;
         let previousEntry = null;
         let previousMetrics = computeMetrics("");
 
@@ -90,16 +133,15 @@ class ScriptParser {
     parse() {
         timeExecution("Pre-processing", () => this.preprocess());
 
-        //let lines = this.rawScript.split("\n");
-        let lines;
-        timeExecution("Split", () => {
-            lines = this.rawScript.split("\n");
-        });
+        let lines = this.rawScript.split("\n");
 
         // Discard pass
         let discard = ["<pre>", "</pre>"];
         timeExecution("Discard pass", () => {
+            // Discard lines that match exactly (after trim) one of the tokens in the discard array
             lines = lines.filter(l => discard.indexOf(l.trim()) == -1);
+            // If a line contains one of the discard tokens (but is not equal to it), remove the token from the line
+            lines = lines.map(l => discard.reduce((accumulator, currentValue) => accumulator.replace(currentValue, ""), l));
         });
 
         // Create initial entry
@@ -109,8 +151,8 @@ class ScriptParser {
             // Blank line counter, reset every time a line isn't blank.
             let blankLineCounter = 0;
 
-            this.entries = this.pass(entries, (e, i, metrics, previousMetrics, previousEntry) => {
-                if(e.content.length == 0) {
+            this.entries = this.pass((e, i, metrics, previousMetrics, previousEntry) => {
+                if(e.content.trim().length == 0) {
                     blankLineCounter++;
                     return null;
                 }
@@ -128,24 +170,19 @@ class ScriptParser {
                     content: e.content,
                     locked: false
                 };
-            });
+            }, entries);
+            console.log(this.entries.slice(0,5))
         });
 
-        let boldTagPattern = /(<b>)|(<\/b>)/g;
-        let characterSuffixPattern = /\s*(\((V.O.|VO|V\/O|O.S.|OS|O\/S|O.C.|OC|CONT'D|CONT|CONT.|CONT'D.|CONT 'D.|OFF)\))|( --)/g;
-        let characterExcludePatterns = [
-            / -(<\/b>)?$/g, // ends with " -"
-            /^\s*(<b>)?\(.+\)(<\/b>)?$/, // all in parenthesis
-            /^\s*(<b>)?[^\w]+(<\/b>)?$/, // no alphanumeric characters
-        ];
-        let cleanupCharacterEntry = e => e.content.replace(characterSuffixPattern, "").toLowerCase().replace(boldTagPattern, "").trim();
+
+        
 
         // Do a pass to identify common indents that correspond to characters and scenes:
         // biggest group of lines with identical indentation, that are either bold or all upper-case. 
         timeExecution("CHARACTER and SCENES pass", () => {
             let indentOccurrences = {};
             let total = 0;
-            this.pass(this.entries, (e, i, metrics) => {
+            this.pass((e, i, metrics) => {
                 if(metrics.upperCaseFrequency == 1 || metrics.bold) {
                     if(!indentOccurrences[metrics.indentation])
                         indentOccurrences[metrics.indentation] = [];
@@ -159,38 +196,66 @@ class ScriptParser {
 
             if(sameIndentEntries.length >= 2
                 && sameIndentEntries[0].length > this.entries.length * 0.1
-                && sameIndentEntries[1].length > this.entries.length * 0.025
-                && sameIndentEntries[0].length + sameIndentEntries[1].length > total * 0.66) {
+                && sameIndentEntries[1].length > this.entries.length * 0.015
+                && sameIndentEntries[0].length + sameIndentEntries[1].length > total * 0.5) {
                 // if so, the one with the most entries is almost certainly character names; the other category is almost certainly scenes
                 // (we could also compare the indents, since character names are usually centered)
-                let characterNameEntries = sameIndentEntries[0].filter(idx => idx >= 1).map(idx => this.entries[idx]).filter(e => !matchesOnePattern(e.content, characterExcludePatterns));
+                let characterNameEntries = sameIndentEntries[0].filter(idx => idx >= 1).map(idx => this.entries[idx]).filter(e => !matchesOnePattern(e.content, patterns.characterExclusion));
                 characterNameEntries.forEach(e => e.annotation = Annotation.CHARACTER);
                 sameIndentEntries[1].forEach(idx => this.entries[idx].annotation = Annotation.SCENE);
 
                 if(sameIndentEntries.length > 2) {
                     let characterNames = new Set(characterNameEntries.map(e => cleanupCharacterEntry(e)));
-                    //console.log(characterNames);
                     sameIndentEntries.shift();
                     sameIndentEntries.shift();
-                    
-                    // Flag indentation groups that contain an entry that is a character name as CHARACTER entries
-                    let toFlag = sameIndentEntries.filter(entryIdcs => entryIdcs.some(idx => characterNames.has(cleanupCharacterEntry(this.entries[idx]))));
-                    toFlag.forEach(entries => entries.filter(idx => !matchesOnePattern(this.entries[idx].content, characterExcludePatterns)).forEach(idx => this.entries[idx].annotation = Annotation.CHARACTER));
-                    console.log(toFlag);
+
+                    // Flag indentation groups that contain an entry that is a character name as CHARACTER entries                   
+                    let indentGroupsWithCharacters = [];
+                    do {
+                        indentGroupsWithCharacters = sameIndentEntries.filter(indices => indices.some(idx => characterNames.has(cleanupCharacterEntry(this.entries[idx]))));
+                        sameIndentEntries =         sameIndentEntries.filter(indices => !indices.some(idx => characterNames.has(cleanupCharacterEntry(this.entries[idx]))));
+                        indentGroupsWithCharacters.forEach(indices => {    
+                            indices.filter(idx => idx >= 1 && !matchesOnePattern(this.entries[idx].content, patterns.characterExclusion)).forEach(idx => {
+                                this.entries[idx].annotation = Annotation.CHARACTER
+                                characterNames.add(cleanupCharacterEntry(this.entries[idx]));
+                            });
+                        });
+                        
+                    }
+                    while(indentGroupsWithCharacters.length > 0);
                 }
                  
             }
             else {
                 console.log("Cannot rely on indent for annotating.");
+                console.log(sameIndentEntries.length);
+                console.log(sameIndentEntries[0].length, this.entries.length * 0.1);
+                console.log(sameIndentEntries[1].length, this.entries.length * 0.02)
+                console.log(sameIndentEntries[0].length + sameIndentEntries[1].length, total * 0.66);
                 console.log(indentOccurrences);
             }
         });
 
+        // Flag SCENE entries with certainty using a lexicon
+        timeExecution("SCENE lexicon pass", () => {
+             this.pass((e) => {                
+                if(e.annotation == Annotation.UNKNOWN || !e.locked) {
+                    if(matchesOnePattern(e.content.replace("<b>", ""), patterns.sceneLexicon)) {
+                        e.annotation = Annotation.SCENE;                   
+                        e.locked = true;
+                    }
+                }
+            });
+        });
+
+        // TODO for lines like
+        // This is the part where you run away. (The men scramble to get away. He laughs.) And stay out! (looks down and picks up a piece of paper. Reads.) "Wanted. Fairy tale creatures."(He sighs and throws the paper over his shoulder.)
+        // Separate into SPEECH \n SPEECH CUE \n SPEECH \n SPEECH CUE etc 
+
         // Flag SPEECH CUE entries
         timeExecution("Flag SPEECH CUE", () => {
-            let speechCuePattern = /^\s*(<b>)?\(.+\)(<\/b>)?\s*$/;
-            this.pass(this.entries, (e) => {
-                if(e.annotation == Annotation.UNKNOWN && e.content.search(speechCuePattern) != -1) {
+            this.pass((e) => {
+                if(e.annotation == Annotation.UNKNOWN && e.content.search(patterns.speechCue) != -1) {
                     e.annotation = Annotation.SPEECH_CUE;
                     e.locked = true;
                 }
@@ -199,8 +264,9 @@ class ScriptParser {
     
         // Flag entries that follow a CHARACTER as SPEECH, unless they differ from the expected indent 
         timeExecution("Flag SPEECH", () => {
+            /*
             let indentOccurrences = {};
-            this.pass(this.entries, (e, i, metrics, previousMetrics, previousEntry) => {
+            this.pass((e, i, metrics, previousMetrics, previousEntry) => {
                 if(i > 0 && previousEntry.annotation == Annotation.CHARACTER) {
                     if(!indentOccurrences[metrics.indentation])
                         indentOccurrences[metrics.indentation] = [];
@@ -220,10 +286,10 @@ class ScriptParser {
                 //indentOccurrences[speechCueIndent].forEach(idx => this.entries[idx].annotation = Annotation.SPEECH_CUE);
 
                 // Do one pass to catch the speech entries that occur after a speech cue. For example:
-                /* [CHARACTER]                  LUKE
-                   [SPEECH CUE]             (Very animated)
-                   [UNKNOWN]                         ...so I cut off my power, shut down the afterburners [...] */
-                this.pass(this.entries, (e, i, metrics, previousMetrics, previousEntry) => {
+                // [CHARACTER]                  LUKE
+                //   [SPEECH CUE]             (Very animated)
+                //   [UNKNOWN]                         ...so I cut off my power, shut down the afterburners [...] 
+                this.pass((e, i, metrics, previousMetrics, previousEntry) => {
                     if(i > 0 && (previousEntry.annotation == Annotation.SPEECH || previousEntry.annotation == Annotation.SPEECH_CUE)) {
                         if(!metrics.bold && metrics.upperCaseFrequency < 0.9) {
                             if(metrics.indentation == speechIndent)
@@ -237,49 +303,42 @@ class ScriptParser {
             if(indentationLevels.length > 2) {
                 console.log("Anomaly: found more than 2 indentation levels for entries that follow CHARACTER entries.");
                 console.log(indentOccurrences);
-            }
-        });
+            }*/
 
-        // Flag SCENE entries with certainty using a lexicon
-        timeExecution("SCENE lexicon pass", () => {
-            let sceneCertaintyLexicon = [
-                / INT\.?:? /g, / INTERIOR:? /g, /^\s*INSIDE /g,
-                / EXT\.?:? /g, / EXTERIOR:? /g, /^\s*OUTSIDE /g,
-                / EXT\.?\/INT\.?:? /g, / INT\.?\/EXT\.?:? /g,
-                / E\.?\/I\.?:? /g, / I\.?\/E\.?:? /g
-            ];
-
-            this.pass(this.entries, (e) => {                
-                if(e.annotation == Annotation.UNKNOWN || !e.locked) {
-                    if(matchesOnePattern(e.content, sceneCertaintyLexicon))
-                        e.annotation = Annotation.SCENE;                   
+            
+            let indentOccurrences = {};
+            let postSpeechCueIndentOccurrences = {};
+            this.pass((e, i, metrics, previousMetrics, previousEntry) => {
+                if(i > 0 && previousEntry.annotation == Annotation.CHARACTER) {
+                    if(e.annotation != Annotation.UNKNOWN)
+                        console.log(previousEntry.content, e.annotation, e.content)
+                    if(e.annotation == Annotation.UNKNOWN)
+                        e.annotation = Annotation.SPEECH;
+                    if(!indentOccurrences[metrics.indentation])
+                        indentOccurrences[metrics.indentation] = [];
+                    indentOccurrences[metrics.indentation].push(i);
                 }
+                else if(i > 0 && previousEntry.annotation == Annotation.SPEECH_CUE) {
+                    if(!postSpeechCueIndentOccurrences[metrics.indentation])
+                        postSpeechCueIndentOccurrences[metrics.indentation] = [];
+                    postSpeechCueIndentOccurrences[metrics.indentation].push(i); 
+                }
+            });
+
+            // Catch SPEECH that follows a SPEECH CUE
+            let postCharacterIndents = Object.keys(indentOccurrences);
+            let postSpeechCueIndents = Object.keys(postSpeechCueIndentOccurrences);
+            postSpeechCueIndents.filter(indent => postCharacterIndents.indexOf(indent) != -1).forEach(indent => {
+                postSpeechCueIndentOccurrences[indent].filter(idx => this.entries[idx].annotation == Annotation.UNKNOWN).forEach(idx => this.entries[idx].annotation = Annotation.SPEECH);
             });
         });
 
-        let metaLexicon = [
-            /FADE /g, /FADES /g, /DISSOLVE /g, /BLACK:/g,
-            /THE END/g, /- END/g,
-            /CREDITS/g,
-            /CUT TO/g, /CUT BACK TO/g, /(INTERCUT)/g,
-            /CLOSE ON/g, /CLOSER ON/g, /CLOSE UP/g, /CLOSEUP/g,
-            /WIDER ON/g, /WIDE ON/g,
-            /RESUME ON/g, /BACK ON /g, /UP ON /g,
-            / LATER/g,
-            /CONTINUED/g,
-            /(MORE)/g,
-            / SHOT:?$/g,
-            /THEIR POV/g, /'S POV/g,
-            /SUPER:/,
-            / BY .+ PLAYS\.?\s*/g, // ex: "SURRENDER" BY CHEAP TRICK PLAYS.
-            //"TITLE |^\s*ON | VIEW| SHOTS|CAMERA|IMAGE:")
-        ];
-        
+       
         // Find meta entries using lexicon
         timeExecution("META lexicon pass", () => {
-            this.pass(this.entries, (e) => {                
+            this.pass((e) => {                
                 if(!e.locked && (e.annotation == Annotation.UNKNOWN || e.annotation == Annotation.CHARACTER || e.annotation == Annotation.SCENE)) {
-                    if(matchesOnePattern(e.content, metaLexicon))
+                    if(matchesOnePattern(e.content, patterns.metaLexicon))
                         e.annotation = Annotation.META;                   
                 }
             });
@@ -289,7 +348,7 @@ class ScriptParser {
         timeExecution("Find NARRATIVE using character name occurrences and annotations", () => {
             // Build a list of lower-case character names
             let characterNames = [];
-            this.pass(this.entries, (e) => {                
+            this.pass((e) => {                
                 if(e.annotation == Annotation.CHARACTER) {
                     let name = cleanupCharacterEntry(e);
                     if(characterNames.indexOf(name) == -1)
@@ -297,9 +356,9 @@ class ScriptParser {
                 }
             });
 
-            // Look for UNKNOWN entries that mention character names. They are likely to be NARRATIVE (we use indentation to catch all of them)
+            // Look for UNKNOWN entries that mention character names. They are likely to be NARRATIVE (we use indentation to extrapolate to the other ones)
             let indentOccurrences = {};
-            this.pass(this.entries, (e, i, metrics) => {
+            this.pass((e, i, metrics) => {
                 if(e.annotation == Annotation.UNKNOWN) {
                     let lowerCaseContent = e.content.toLowerCase();
                     if(characterNames.some(n => lowerCaseContent.includes(n))) {
@@ -313,7 +372,7 @@ class ScriptParser {
             let narrativeIndentation = indentationLevels[0];
             
             // Flag UNKNOWN entries with the right indentation as NARRATIVE
-            this.pass(this.entries, (e, i, metrics) => {
+            this.pass((e, i, metrics) => {
                 if(e.annotation == Annotation.UNKNOWN && metrics.indentation == narrativeIndentation)
                     e.annotation = Annotation.NARRATIVE;
             });
@@ -324,7 +383,7 @@ class ScriptParser {
             let removed = [];
             this.entries = this.entries.filter(e => {
                 if(e.annotation == Annotation.UNKNOWN) {
-                    if(e.content.search(/^\s*(<b>)?[0-9]*(<\/b>)?\s*$/) != -1) {
+                    if(e.content.search(patterns.numericalOnly) != -1) {
                         removed.push(e.content);
                         return false;
                     }
@@ -349,9 +408,10 @@ class ScriptParser {
 
 
         timeExecution("Last SPEECH pass", () => {
-            this.pass(this.entries, (e, i, metrics, previousMetrics, previousEntry) => {
-                if(i > 0 && previousEntry.annotation == Annotation.CHARACTER && [Annotation.SPEECH, Annotation.CHARACTER, Annotation.SPEECH_CUE].indexOf(e.annotation) == -1)
+            this.pass((e, i, metrics, previousMetrics, previousEntry) => {
+                if(i > 0 && previousEntry.annotation == Annotation.CHARACTER && !e.locked && [Annotation.SPEECH, Annotation.CHARACTER, Annotation.SPEECH_CUE].indexOf(e.annotation) == -1)
                     e.annotation = Annotation.SPEECH;
+                // TODO if CHARACTER entry is followed by a locked entry that is not SPEECH or SPEECH CUE, flag it as UNKNOWN 
             });
         });
 
@@ -381,7 +441,10 @@ class ScriptParser {
         text = re.sub("<b>( *)\n(?=(\s|\n)*</b>)", "\n<b>", text)
     
         */
-        
+    
+        // Replace tabs with spaces
+        repl(/\t/g, "        ");
+
         // Remove spaces between consecutive line breaks
         repl(/\n *\n/g, "\n\n");
 
@@ -412,7 +475,7 @@ class ScriptParser {
         // Start by computing the average indentation for each type of annotation 
         let totalEntries = {};
         let averageIndent = {};
-        this.pass(this.entries, (e, i, metrics) => {
+        this.pass((e, i, metrics) => {
             totalEntries[e.annotation] = (totalEntries[e.annotation] || 0) + 1;
             averageIndent[e.annotation] = (averageIndent[e.annotation] || 0) + metrics.indentation;
         });
@@ -420,7 +483,7 @@ class ScriptParser {
 
         // Fix consecutive CHARACTER entries
         let roundedCharacterIndent = Math.round(averageIndent[Annotation.CHARACTER]);
-        this.pass(this.entries, (e, i, metrics, previousMetrics, previousEntry) => {
+        this.pass((e, i, metrics, previousMetrics, previousEntry) => {
             if(i > 0 && previousEntry.annotation == Annotation.CHARACTER && e.annotation == Annotation.CHARACTER) {
                 let discard = null;
                 // Use indentation if possible
@@ -443,96 +506,40 @@ class ScriptParser {
             }
         });
     }
+
+    diagnose() {
+        console.log("\n##### Screenplay parsing diagnosis #####");
+        let speechAnomalies = [];
+        let unknownLines = [];
+        this.pass((e, i, metrics, previousMetrics, previousEntry) => {
+            if(i > 0 && previousEntry.annotation == Annotation.CHARACTER && e.annotation != Annotation.SPEECH && e.annotation != Annotation.SPEECH_CUE)
+                speechAnomalies.push(i); 
+            if(e.annotation == Annotation.UNKNOWN)
+                unknownLines.push(i);    
+        });
+        if(speechAnomalies.length > 0)
+            console.log(`${speechAnomalies.length} speech anomalies at following line indices: ${speechAnomalies}`);
+        if(unknownLines.length > 0)
+            console.log(`${unknownLines.length} unknown lines found at following line indices: ${unknownLines}`);
+        
+
+        // List character occurrences
+        let characterOccurrences = this.entries.filter(e => e.annotation == Annotation.CHARACTER).map(e => cleanupCharacterEntry(e).toUpperCase()).reduce((accumulator, val) => {
+            if(!accumulator[val])
+                accumulator[val] = 0;
+            accumulator[val]++;
+            return accumulator;
+        }, {});
+        let sortedOccurrences = {};
+        Object.keys(characterOccurrences).sort((a,b) => characterOccurrences[b] - characterOccurrences[a]).forEach(name => sortedOccurrences[name] = characterOccurrences[name]);
+        console.log("Character occurrences:", sortedOccurrences);
+    }
 }
 
 export function parseMovieScript(rawScript) {
-    return new ScriptParser(rawScript).parse();
+    let parser = new ScriptParser(rawScript);
+    let parsed = parser.parse();
+    parser.diagnose();
+
+    return parsed;
 }
-
-/*
-    exp_location = re.compile("INT\.|EXT\.|INT |EXT |INT:|EXT:|INTERIOR|EXTERIOR|EXT/INT|INT/EXT|I/E|INSIDE|OUTSIDE| ROOM")
-    exp_location_2 = re.compile("^\s*[0-9]+[A-Z]{0,1}\s*[A-Z]+")
-    exp_direction = re.compile("FADE |FADES |THE END|- END |- THE END |CREDITS|END CREDITS|CUT TO|CUT BACK TO|(\()*CONTINUED|\(MORE\)|TITLE |\(INTERCUT\)|ANGLE|CLOSE ON |CLOSE UP| SHOT|THEIR POV|\'S POV|WIDER ON|WIDE ON|CLOSER ON|CLOSE ON|RESUME ON|^\s*ON | VIEW|LATER| SHOTS|DISSOLVE|SUPER:|IN THE |UNDER THE |OVER THE |BACK ON |UP ON |FROM |CLOSEUP|CAMERA|IMAGE:")
-    exp_direction_continued = re.compile("^(\s)*[0-9    ]*(\s)*(\()*CONTINUED")
-
-    exp_number_period = re.compile("^(\s|\n)*[0-9]+\.(\s|\n)*$")
-    exp_character_colon_speech = re.compile("^[\t ]*[0-9A-Z\- l]+(?=\: [a-zA-Z!() ]+)")
-
-    # Example match: "FADE TO:"
-    exp_direction_colon_ending = re.compile("\:\s*$")
-
-    # Example match: "SUDDENLY."
-    exp_direction_period_ending = re.compile("\.\s*$")
-
-    # Example match: "  45 \n "
-    exp_numeric_only = re.compile("^\s*[0-9]+\s*$")
-
-    # Example match: "(PEEKS INSIDE)"
-    exp_parenthesis_caps = re.compile("^(\s|\n)*\([A-Z 0-9`]+\)(\s|\n)*$") 
-
-    exp_has_alphanumeric = re.compile(r"[0-9A-Za-z]")
-
-    character_cleanup_pattern_1 = r"\s*(\(V\.O\.\)|\(VO\)|\(V/O\)|\(O.S.\)|\(OS\)|\(O/S\)|\(O\.C\.\)|\(OC\)|\(CONT'D\)|\(CONT\)|\(CONT\.\)|\(CONT'D.\)|\(CONT 'D.\)|(OFF))"
-    character_cleanup_pattern_2 = r" --"
-
-
-
-    def classify_entry_type(self, raw, is_bold):
-        is_first = len(self.entries) == 0
-
-        entry_type = TYPE_DIRECTION
-
-        # Handle lines like "64." or "12"
-        if exp_number_period.search(raw) != None or exp_numeric_only.search(raw) != None:
-            entry_type = TYPE_DIRECTION
-        else:
-            # Lines that are for sure a LOCATION
-            if is_bold and (exp_location.search(raw) != None or exp_location_2.search(raw) != None):
-                entry_type = TYPE_LOCATION
-                self.meta_finished = True
-            # Lines that are for sure a DIRECTION
-            elif exp_direction.search(raw) != None:
-                entry_type = TYPE_DIRECTION
-                self.meta_finished = True
-            # Handle movies where dialogue is written as CHARACTER: Speech
-            elif exp_character_colon_speech.search(raw) != None:
-                match = exp_character_colon_speech.search(raw)
-                character_name = match.group().strip()
-                character_name = character_name.replace("l", "I") # fix a scan error that often occurs
-                self.entries.append({"type": TYPE_CHARACTER, "content": character_name})
-                entry_type = TYPE_SPEECH
-                raw = raw[match.end()+1:]
-            elif is_bold:
-                if exp_direction_continued.search(raw) != None or exp_direction_colon_ending.search(raw) != None or exp_direction_period_ending.search(raw) != None:
-                    entry_type = TYPE_DIRECTION
-                # After a CHARACTER entry, there should be a SPEECH entry
-                elif (not is_first) and self.entries[-1]["type"] == TYPE_CHARACTER:
-                    entry_type == TYPE_SPEECH
-                # Very likely to be a speech
-                elif "!" in raw or raw.strip().count(" ") >= 4:
-                    entry_type = TYPE_SPEECH
-                elif exp_parenthesis_caps.search(raw) != None:
-                    if (not is_first) and self.entries[-1]["type"] in [TYPE_CHARACTER, TYPE_SPEECH]:
-                        entry_type = TYPE_SPEECH # action like "(SCANS FILE)"
-                    else:
-                        entry_type = TYPE_DIRECTION # direction like "(INTO COMM)" or "(TO <name>)"
-                else:
-                    entry_type = TYPE_CHARACTER
-            else:
-                # Check again for LOCATION, this time on non-bold
-                if exp_location.search(raw) != None:
-                    entry_type = TYPE_LOCATION
-                    self.meta_finished = True
-                # Flag instructions such as "PAN TO:" as DIRECTION
-                elif exp_direction_colon_ending.search(raw) != None:
-                    entry_type = TYPE_DIRECTION
-                elif (not is_first) and self.entries[-1]["type"] in [TYPE_CHARACTER, TYPE_SPEECH]:
-                    entry_type = TYPE_SPEECH
-
-        if not self.meta_finished:
-            entry_type = TYPE_META                
-
-        return entry_type, raw
-
-
-*/
