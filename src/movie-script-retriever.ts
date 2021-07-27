@@ -3,7 +3,7 @@
  * @module movie-script-retriever
  */
 
-import {fetch} from "./utils";
+import {fetchHTML} from "./utils";
 import {resolve} from "url";
 import {URL_IMSDB, BATCH_SIZE_FETCH_SCRIPTS} from "./constants";
 import {MovieMetadata} from "./movie-metadata";
@@ -29,14 +29,14 @@ export async function fetchMovieScript(movie: MovieMetadata): Promise<string | n
     }
 
     try {
-        const $ = await fetch(resolve(URL_IMSDB, scriptURL));
+        const $ = await fetchHTML(resolve(URL_IMSDB, scriptURL));
         const scriptContainer = $("td.scrtext");
 
         // Remove unwanted elements at the end
         scriptContainer.children("table").nextAll().remove();
         scriptContainer.children("table").remove();
 
-        let htmlContent = "";
+        let htmlContent: string | null = "";
 
         if (scriptContainer.length == 0) {
             console.error(`Could not retrieve movie script for movie ${movie.title}.`);

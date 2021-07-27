@@ -3,18 +3,16 @@
  * @module utils
  */
 
-import rp from "request-promise-native";
 import cheerio from "cheerio";
+import fetch from "node-fetch";
 
 /**
  * Fetches html from a remote location and parses it using cheerio.
  * @param {String} uri The remote URL.
  * @return {cheerio} a cheerio object.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function fetch(uri: string): Promise<any> {
-    return await rp({
-        uri: uri,
-        transform: (body) => cheerio.load(body, {decodeEntities: false}),
-    });
+export async function fetchHTML(uri: string): Promise<cheerio.Root> {
+    const resp = await fetch(uri, {method: "GET"});
+    const raw = await resp.text();
+    return cheerio.load(raw, {decodeEntities: false});
 }

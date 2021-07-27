@@ -3,7 +3,7 @@
  * @module metadata-retriever
  */
 
-import {fetch} from "./utils";
+import {fetchHTML} from "./utils";
 import {resolve} from "url";
 import {MovieMetadata} from "./movie-metadata";
 import {URL_IMSDB, URL_IMSDB_ALL_SCRIPTS, BATCH_SIZE_FETCH_METADATA} from "./constants";
@@ -47,7 +47,7 @@ async function fetchMovieDetailsInBatch(movies) {
 async function fetchMovieDetails(movie) {
     let $;
     try {
-        $ = await fetch(resolve(URL_IMSDB, movie.detailsURL));
+        $ = await fetchHTML(resolve(URL_IMSDB, movie.detailsURL));
     } catch (err) {
         console.error("An error occured while fetching details for movie '" + movie.title + "':");
         console.error(err);
@@ -82,7 +82,7 @@ async function fetchMovieDetails(movie) {
 export async function getMoviesList(fetchDetails = true): Promise<MovieMetadata[]> {
     let $;
     try {
-        $ = await fetch(URL_IMSDB_ALL_SCRIPTS);
+        $ = await fetchHTML(URL_IMSDB_ALL_SCRIPTS);
     } catch (err) {
         console.error("An error occured while fetching or parsing the movies list.");
         console.error(err);
