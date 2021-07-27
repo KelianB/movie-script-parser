@@ -7,7 +7,7 @@ import {MovieCollection} from "../src/movie-metadata.js";
 async function downloadAll() {
     // Load metadata from source
     let movieCollection = await MovieCollection.loadMetaFromSource();
-   
+
     // Save metadata to cache
     movieCollection.saveMetaToCache();
 
@@ -15,7 +15,7 @@ async function downloadAll() {
     let movies = movieCollection.getMovies();
     movieCollection.loadRawScriptsFromSource(movies, (loadedBatch) => {
         // Save batch to cache
-        Object.keys(loadedBatch).forEach(tokenizedTitle => movieCollection.saveRawScriptToCache(tokenizedTitle));
+        Object.keys(loadedBatch).forEach((tokenizedTitle) => movieCollection.saveRawScriptToCache(tokenizedTitle));
 
         // Return true so the data is removed from memory by the MovieCollection class, so we don't fill up RAM.
         return true;

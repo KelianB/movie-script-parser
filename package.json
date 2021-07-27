@@ -1,11 +1,15 @@
 {
   "name": "movie-script-parser",
-  "description": "Parses movie scripts from IMSDb.",
   "version": "1.0.0",
-  "type": "module",
-  "main": "start.js",
+  "author": "Kelian BAERT",
+  "license": "MIT",
+  "description": "Parses movie scripts from IMSDb.",
+  "main": "src/main.ts",
   "scripts": {
-    "start": "node tools/start.js",
+    "prestart": "npm run build",
+    "start": "ts-node . --port 8001",
+    "build": "tsc",
+    "dev": "ts-node-dev . --port 8001",
     "download-all": "node tools/download-all.js",
     "doc": "jsdoc ./src -d ./docs"
   },
@@ -14,8 +18,6 @@
     "url": "https://github.com/KelianB/movie-script-parser.git"
   },
   "keywords": [],
-  "author": "Kelian BAERT",
-  "license": "MIT",
   "homepage": "https://github.com/KelianB/movie-script-parser.git",
   "dependencies": {
     "cheerio": "1.0.0-rc.3",
@@ -24,6 +26,14 @@
     "string-similarity": "^4.0.1"
   },
   "devDependencies": {
-    "jsdoc": "^3.6.4"
+    "@typescript-eslint/eslint-plugin": "^4.14.0",
+    "@typescript-eslint/parser": "^4.14.0",
+    "eslint": "^7.18.0",
+    "eslint-config-prettier": "^7.2.0",
+    "eslint-plugin-prettier": "^3.3.1",
+    "prettier": "^2.2.1",
+    "jsdoc": "^3.6.4",
+    "ts-node-dev": "^1.1.8",
+    "typescript": "^4.3.5"
   }
 }

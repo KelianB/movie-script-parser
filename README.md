@@ -9,4 +9,4 @@ who wants to use the screenplays by cleaning them up and annotating each line.
 
 ## Performance
 
-The parser is flexible enough to performs well on most screenplays. It does however fail on some of the very inconsistent ones due to its rule-based nature. 
+The parser is flexible enough to perform well on most screenplays. It does however fail on some of the very inconsistent ones due to its rule-based nature. 

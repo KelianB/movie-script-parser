@@ -9,12 +9,12 @@ import cheerio from "cheerio";
 /**
  * Fetches html from a remote location and parses it using cheerio.
  * @param {String} uri The remote URL.
- * @return {cheerio} a cheerio object. 
+ * @return {cheerio} a cheerio object.
  */
-export async function fetch(uri) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetch(uri: string): Promise<any> {
     return await rp({
         uri: uri,
-        transform: body => cheerio.load(body, {decodeEntities: false})
+        transform: (body) => cheerio.load(body, {decodeEntities: false}),
     });
 }
-
