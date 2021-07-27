@@ -8,4 +8,4 @@ export enum Annotation {
     CHARACTER = "CHARACTER",
 }
 
-export type Entry = {content: string; annotation?: Annotation; locked?: boolean};
+export type Entry = {content: string; annotation: Annotation; locked?: boolean};

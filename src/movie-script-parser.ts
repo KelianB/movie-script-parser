@@ -186,8 +186,8 @@ class ScriptParser {
 
         // Create initial entry
         timeExecution("Init entries & merge pass", () => {
-            const entries = lines.map((l) => {
-                return {content: l};
+            const entries: Entry[] = lines.map((l) => {
+                return {content: l, annotation: Annotation.UNKNOWN};
             });
 
             // Blank line counter, reset every time a line isn't blank.
@@ -290,7 +290,7 @@ class ScriptParser {
         // Flag SCENE entries with certainty using a lexicon
         timeExecution("SCENE lexicon pass", () => {
             this.pass((e) => {
-                if (e.annotation == Annotation.UNKNOWN || !e.locked) {
+                if (e.annotation === Annotation.UNKNOWN || !e.locked) {
                     if (matchesOnePattern(e.content.replace("<b>", ""), patterns.sceneLexicon)) {
                         e.annotation = Annotation.SCENE;
                         e.locked = true;
@@ -306,7 +306,7 @@ class ScriptParser {
         // Flag SPEECH CUE entries
         timeExecution("Flag SPEECH CUE", () => {
             this.pass((e) => {
-                if (e.annotation == Annotation.UNKNOWN && e.content.search(patterns.speechCue) != -1) {
+                if (e.annotation === Annotation.UNKNOWN && e.content.search(patterns.speechCue) != -1) {
                     e.annotation = Annotation.SPEECH_CUE;
                     e.locked = true;
                 }
@@ -360,10 +360,10 @@ class ScriptParser {
             const postSpeechCueIndentOccurrences = {};
             this.pass((e, i, metrics, previousMetrics, previousEntry) => {
                 if (previousEntry && i > 0) {
-                    if (previousEntry.annotation == Annotation.CHARACTER) {
-                        if (e.annotation != Annotation.UNKNOWN)
+                    if (previousEntry.annotation === Annotation.CHARACTER) {
+                        if (e.annotation !== Annotation.UNKNOWN)
                             console.log(previousEntry.content, e.annotation, e.content);
-                        if (e.annotation == Annotation.UNKNOWN) e.annotation = Annotation.SPEECH;
+                        if (e.annotation === Annotation.UNKNOWN) e.annotation = Annotation.SPEECH;
                         if (!indentOccurrences[metrics.indentation]) indentOccurrences[metrics.indentation] = [];
                         indentOccurrences[metrics.indentation].push(i);
                     } else if (previousEntry.annotation == Annotation.SPEECH_CUE) {
@@ -381,7 +381,7 @@ class ScriptParser {
                 .filter((indent) => postCharacterIndents.indexOf(indent) != -1)
                 .forEach((indent) => {
                     postSpeechCueIndentOccurrences[indent]
-                        .filter((idx) => this.entries[idx].annotation == Annotation.UNKNOWN)
+                        .filter((idx) => this.entries[idx].annotation === Annotation.UNKNOWN)
                         .forEach((idx) => (this.entries[idx].annotation = Annotation.SPEECH));
                 });
         });
@@ -391,9 +391,9 @@ class ScriptParser {
             this.pass((e) => {
                 if (
                     !e.locked &&
-                    (e.annotation == Annotation.UNKNOWN ||
-                        e.annotation == Annotation.CHARACTER ||
-                        e.annotation == Annotation.SCENE)
+                    (e.annotation === Annotation.UNKNOWN ||
+                        e.annotation === Annotation.CHARACTER ||
+                        e.annotation === Annotation.SCENE)
                 ) {
                     if (matchesOnePattern(e.content, patterns.metaLexicon)) e.annotation = Annotation.META;
                 }
@@ -405,7 +405,7 @@ class ScriptParser {
             // Build a list of lower-case character names
             const characterNames: string[] = [];
             this.pass((e) => {
-                if (e.annotation == Annotation.CHARACTER) {
+                if (e.annotation === Annotation.CHARACTER) {
                     const name = cleanupCharacterEntry(e);
                     if (characterNames.indexOf(name) == -1) characterNames.push(name);
                 }
@@ -414,7 +414,7 @@ class ScriptParser {
             // Look for UNKNOWN entries that mention character names. They are likely to be NARRATIVE (we use indentation to extrapolate to the other ones)
             const indentOccurrences: Map<number, number[]> = new Map();
             this.pass((e, i, metrics) => {
-                if (e.annotation == Annotation.UNKNOWN) {
+                if (e.annotation === Annotation.UNKNOWN) {
                     const lowerCaseContent = e.content.toLowerCase();
                     if (characterNames.some((n) => lowerCaseContent.includes(n))) {
                         if (!indentOccurrences.has(metrics.indentation)) indentOccurrences.set(metrics.indentation, []);
@@ -429,7 +429,7 @@ class ScriptParser {
 
             // Flag UNKNOWN entries with the right indentation as NARRATIVE
             this.pass((e, i, metrics) => {
-                if (e.annotation == Annotation.UNKNOWN && metrics.indentation == narrativeIndentation)
+                if (e.annotation === Annotation.UNKNOWN && metrics.indentation === narrativeIndentation)
                     e.annotation = Annotation.NARRATIVE;
             });
         });
@@ -438,7 +438,7 @@ class ScriptParser {
         timeExecution("Entry removal pass", () => {
             const removed: string[] = [];
             this.entries = this.entries.filter((e) => {
-                if (e.annotation == Annotation.UNKNOWN) {
+                if (e.annotation === Annotation.UNKNOWN) {
                     if (e.content.search(patterns.numericalOnly) != -1) {
                         removed.push(e.content);
                         return false;
@@ -453,7 +453,7 @@ class ScriptParser {
         timeExecution("Flag META entries", () => {
             // Flag all entries as META until we find a non-unknown one
             let i = 0;
-            while (this.entries[i].annotation == Annotation.UNKNOWN) {
+            while (this.entries[i].annotation === Annotation.UNKNOWN) {
                 this.entries[i].annotation = Annotation.META;
                 i++;
             }
@@ -466,8 +466,7 @@ class ScriptParser {
             this.pass((e, i, metrics, previousMetrics, previousEntry) => {
                 if (
                     previousEntry &&
-                    previousEntry.annotation == Annotation.CHARACTER &&
-                    e.annotation &&
+                    previousEntry.annotation === Annotation.CHARACTER &&
                     !e.locked &&
                     [Annotation.SPEECH, Annotation.CHARACTER, Annotation.SPEECH_CUE].indexOf(e.annotation) == -1
                 )
@@ -539,10 +538,8 @@ class ScriptParser {
         const totalEntries = {};
         const averageIndent = {};
         this.pass((e, i, metrics) => {
-            if (e.annotation) {
-                totalEntries[e.annotation] = (totalEntries[e.annotation] || 0) + 1;
-                averageIndent[e.annotation] = (averageIndent[e.annotation] || 0) + metrics.indentation;
-            }
+            totalEntries[e.annotation] = (totalEntries[e.annotation] || 0) + 1;
+            averageIndent[e.annotation] = (averageIndent[e.annotation] || 0) + metrics.indentation;
         });
         Object.keys(averageIndent).forEach((a) => (averageIndent[a] /= totalEntries[a]));
 
@@ -551,8 +548,8 @@ class ScriptParser {
         this.pass((e, i, metrics, previousMetrics, previousEntry) => {
             if (
                 previousEntry &&
-                previousEntry.annotation == Annotation.CHARACTER &&
-                e.annotation == Annotation.CHARACTER
+                previousEntry.annotation === Annotation.CHARACTER &&
+                e.annotation === Annotation.CHARACTER
             ) {
                 let discard: Entry | null = null;
                 // Use indentation if possible
@@ -586,17 +583,19 @@ class ScriptParser {
         this.pass((e, i, metrics, previousMetrics, previousEntry) => {
             if (
                 previousEntry &&
-                previousEntry.annotation == Annotation.CHARACTER &&
-                e.annotation != Annotation.SPEECH &&
-                e.annotation != Annotation.SPEECH_CUE
+                previousEntry.annotation === Annotation.CHARACTER &&
+                e.annotation !== Annotation.SPEECH &&
+                e.annotation !== Annotation.SPEECH_CUE
             )
                 speechAnomalies.push(i);
             if (e.annotation == Annotation.UNKNOWN) unknownLines.push(i);
         });
         if (speechAnomalies.length > 0)
             console.log(`${speechAnomalies.length} speech anomalies at following line indices: ${speechAnomalies}`);
-        if (unknownLines.length > 0)
-            console.log(`${unknownLines.length} unknown lines found at following line indices: ${unknownLines}`);
+        if (unknownLines.length > 0) {
+            // console.log(`${unknownLines.length} unknown lines found at following line indices: ${unknownLines}`);
+            console.log(`${unknownLines.length} unknown lines found`);
+        }
 
         // List character occurrences
         const characterOccurrences = this.entries
