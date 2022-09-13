@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: movie-collection.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: movie-collection.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * Responsible for operating on movie metadata and scripts, providing storage to cache and utility functions.
+ * @module movie-collection 
+ */
+
+import {getMoviesList} from "./metadata-retriever.js"
+import {fetchMovieScriptsInBatch} from "../src/movie-script-retriever.js";
+import {CACHE_METADATA_FILE, CACHE_SCRIPTS_DIR} from "./constants.js"
+import {writeFileSync, readFileSync} from "fs"
+import stringSimilarity from "string-similarity"
+
+/**
+ * Handles storage and provides utility functions for {@link MovieMetadata} objects and raw movie scripts.
+ */
+export class MovieCollection {
+    /**
+     * Initialize the collection.
+     * @param {Array&lt;MovieMetadata>} meta - An array of metadata objects 
+     */
+    constructor(meta) {
+        this.meta = meta;
+        this.rawScripts = {};
+    }
+
+    /**
+     * Get meta information for all movies.
+     * @return {Array&lt;MovieMetadata>} meta information for all movies.
+     */
+    getMovies() {
+        return Object.values(this.meta);
+    }
+
+    /**
+     * Get meta information for a given movie.
+     * @param {String} [tokenizedTitle] - A tokenized movie title.
+     * @return {MovieMetadata} meta information for the given movie if it is available, else null.
+     */
+    getMetaInformation(tokenizedTitle) {
+        return this.meta[tokenizedTitle] || null;
+    }
+
+    /**
+     * Get a raw movie script from its title. The raw script needs to have been loaded before.
+     * @param {String} tokenizedTitle - The tokenized title of a movie whose raw script has been loaded.
+     * @return {String} the raw movie script associated with the given title, or null if there is no loaded script for this movie. 
+     */
+    getRawScript(tokenizedTitle) {
+        return this.rawScripts[tokenizedTitle] ? this.rawScripts[tokenizedTitle] : null;
+    }
+
+    /**
+     * Search movies by title and return the best match.
+     * @param {String} titleSearchStr The search string.
+     * @return {MovieMetadata} the movie whose title matches the search string best.
+     */
+    searchByTitle(titleSearchStr) {
+        let titles = this.getMovies().map(m => m.title);
+        let search = stringSimilarity.findBestMatch(titleSearchStr, titles);
+        return this.getMovies()[search.bestMatchIndex];
+    }
+
+    /**
+     * Save all meta information to the cache file.
+     */
+    saveMetaToCache() {
+        // Convert all metadata objects to JSON
+        let moviesJSON = this.getMovies().map(mm => mm.toJSON());
+        // Write to file
+        writeFileSync(CACHE_METADATA_FILE, JSON.stringify(moviesJSON));
+    }
+
+    /**
+     * Save the raw script to cache for the given movie.
+     * @param {String} tokenizedTitle - The tokenized title of a movie whose raw script has been loaded.
+     */
+    saveRawScriptToCache(tokenizedTitle) {
+        let rawScript = this.getRawScript(tokenizedTitle); 
+        if(rawScript)
+            writeFileSync(CACHE_SCRIPTS_DIR + this.tokenizedTitle + ".txt", rawScript, "utf8");
+        else
+            console.log(`Cannot save raw script to cache for movie '${tokenizedTitle}': no raw script loaded.`);
+    }
+
+    /**
+     * Loads the raw script of the given movie from cache.
+     * @param {String} tokenizedTitle - The tokenized title of a movie.
+     * @return {String} the raw movie script, or null if it doesn't exist in cache.
+     */
+    loadRawScriptFromCache(tokenizedTitle) {
+        try {
+            let rawScript = readFileSync(CACHE_SCRIPTS_DIR + tokenizedTitle + ".txt", "utf8").toString();
+            this.rawScripts[tokenizedTitle] = rawScript;
+            return rawScript;
+        }
+        catch(e) {
+            console.error(`Cannot load the raw script for the movie ${tokenizedTitle} from cache:`);
+            console.error(e);
+        }
+    }
+
+    /**
+     * Loads the raw script of the given movie from the IMSDb website.
+     * @param {MovieMetadata} movie - The metadata object for a movie.
+     * @return {String} the raw movie script, or null if it doesn't exist.
+     */
+    async loadRawScriptFromSource(movie) {
+        await this.loadRawScriptsFromSource([movie]);
+        return this.rawScripts[movie.tokenizedTitle];
+    }
+    
+    /**
+     * Loads the raw scripts of the given movies from the IMSDb website.
+     * @param {Array&lt;MovieMetadata>} movies - The metadata objects for one or more movies.
+     * @param {function} [onBatchLoaded] - A callback executed whenever a batch of raw scripts has been loaded. If the callback returns true, the scripts are then unloaded from memory.
+     */
+    async loadRawScriptsFromSource(movies, onBatchLoaded) {
+        onBatchLoaded = onBatchLoaded || (() => {});
+        await fetchMovieScriptsInBatch(movies, loadedBatch => {
+            for(let tokenizedTitle in loadedBatch)
+                this.rawScripts[tokenizedTitle] = loadedBatch[tokenizedTitle];
+            
+            let unload = onBatchLoaded(loadedBatch) === true;
+            if(unload) {
+                for(let tokenizedTitle in loadedBatch)
+                    delete this.rawScripts[tokenizedTitle];
+            }
+        });
+    }
+    
+
+    /**
+     * Creates a {@link MovieCollection} by loading all meta information from cache.
+     * @return {MovieCollection}
+     */
+    static loadMetaFromCache() {
+        let moviesJSON = JSON.parse(readFileSync(CACHE_METADATA_FILE));
+        let meta = moviesJSON.map(obj => new MovieMetadata(obj));
+        return new MovieCollection(meta);
+    }
+
+    /**
+     * Creates a {@link MovieCollection} by loading all meta information from the IMSDb website.
+     * @return {MovieCollection}
+     */
+    static async loadMetaFromSource() {
+        // Fetch meta
+        let meta = await getMoviesList(true);
+        return new MovieCollection(meta);
+    }
+}</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-metadata-retriever.html">metadata-retriever</a></li><li><a href="module-movie-collection.html">movie-collection</a></li><li><a href="module-movie-metadata.html">movie-metadata</a></li><li><a href="module-movie-script-parser.html">movie-script-parser</a></li><li><a href="module-movie-script-retriever.html">movie-script-retriever</a></li><li><a href="module-parsed-script.html">parsed-script</a></li><li><a href="module-utils.html">utils</a></li></ul><h3>Classes</h3><ul><li><a href="module-movie-collection.MovieCollection.html">MovieCollection</a></li><li><a href="module-movie-metadata.MovieMetadata.html">MovieMetadata</a></li><li><a href="module-movie-script-parser-ScriptParser.html">ScriptParser</a></li><li><a href="module-parsed-script.ParsedMovieScript.html">ParsedMovieScript</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.4</a> on Sun Jun 28 2020 22:18:58 GMT+0200 (heure d’été d’Europe centrale)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
