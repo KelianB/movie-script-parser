@@ -3,3 +3,4 @@ cache/raw-scripts/*.txt
 output/*
 node_modules/
 build/
+.vscode
